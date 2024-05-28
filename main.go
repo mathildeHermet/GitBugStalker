@@ -16,26 +16,28 @@ import (
 )
 
 var (
-	repoURL           string
-	discordWebhookURL string
-	checkInterval     time.Duration
-	cacheFile         string
-	rateLimitDelay    = 500 * time.Millisecond // Delay between successive Discord notifications
-	lastChecked       time.Time
-	logger            *log.Logger
+	repoURL              string
+	discordWebhookURL    string
+	googleChatWebhookURL string
+	checkInterval        time.Duration
+	cacheFile            string
+	rateLimitDelay       = 500 * time.Millisecond // Delay between successive notifications
+	lastChecked          time.Time
+	logger               *log.Logger
 )
 
 func main() {
 	// Define command-line flags
 	flag.StringVar(&repoURL, "github-repo", "", "GitHub repository URL")
 	flag.StringVar(&discordWebhookURL, "discord-hook-url", "", "Discord webhook URL")
+	flag.StringVar(&googleChatWebhookURL, "google-chat-hook-url", "", "Google Chat webhook URL")
 	flag.DurationVar(&checkInterval, "refresh-interval", 10*time.Minute, "Refresh interval")
 	flag.StringVar(&cacheFile, "cache-file", ".local/cache/issue_cache.txt", "Cache file")
 	flag.Parse()
 
-	// Check that required flags are provided
-	if repoURL == "" || discordWebhookURL == "" {
-		log.Fatalf("Both --github-repo and --discord-hook-url flags are required")
+	// Check that at least one webhook URL is provided
+	if repoURL == "" || (discordWebhookURL == "" && googleChatWebhookURL == "") {
+		log.Fatalf("GitHub repo and at least one webhook URL (--discord-hook-url or --google-chat-hook-url) are required")
 	}
 
 	// Initialize the logger to write to stdout
@@ -98,7 +100,7 @@ func parseIssues(html string) {
 		}
 
 		logger.Printf("Found new issue: ID=%s, Title=%s, URL=%s\n", issueID, issueTitle, issueURL)
-		notifyDiscord(issueTitle, issueURL)
+		notify(issueTitle, issueURL)
 
 		// Add the issue ID to the cache
 		cache[issueID] = true
@@ -110,6 +112,15 @@ func parseIssues(html string) {
 	// Save the updated cache
 	if err := saveCache(cacheFile, cache); err != nil {
 		logger.Printf("Error saving cache: %v\n", err)
+	}
+}
+
+func notify(issueTitle, issueURL string) {
+	if discordWebhookURL != "" {
+		notifyDiscord(issueTitle, issueURL)
+	}
+	if googleChatWebhookURL != "" {
+		notifyGoogleChat(issueTitle, issueURL)
 	}
 }
 
@@ -133,6 +144,29 @@ func notifyDiscord(issueTitle, issueURL string) {
 		logger.Printf("Non-204 response from Discord: %s\n", resp.Status)
 	} else {
 		logger.Println("Message successfully sent to Discord")
+	}
+}
+
+func notifyGoogleChat(issueTitle, issueURL string) {
+	message := fmt.Sprintf("New Issue Created:\n\nTitle: %s\nURL: %s", issueTitle, issueURL)
+	payload := map[string]string{"text": message}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		logger.Printf("Error marshaling payload: %v\n", err)
+		return
+	}
+
+	resp, err := http.Post(googleChatWebhookURL, "application/json", bytes.NewBuffer(payloadBytes))
+	if err != nil {
+		logger.Printf("Error sending to Google Chat: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Printf("Non-200 response from Google Chat: %s\n", resp.Status)
+	} else {
+		logger.Println("Message successfully sent to Google Chat")
 	}
 }
 
