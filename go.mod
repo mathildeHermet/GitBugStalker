@@ -1,3 +1,3 @@
-module github.com/mathildeHermet/hookvirt
+module github.com/mathildeHermet/gitbugstalker
 
-go 1.22.2
+go 1.22
