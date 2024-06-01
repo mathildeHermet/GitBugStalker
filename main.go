@@ -22,7 +22,6 @@ var (
 	checkInterval        time.Duration
 	cacheFile            string
 	rateLimitDelay       = 500 * time.Millisecond // Delay between successive notifications
-	lastChecked          time.Time
 	logger               *log.Logger
 )
 
@@ -42,8 +41,6 @@ func main() {
 
 	// Initialize the logger to write to stdout
 	logger = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
-
-	lastChecked = time.Now()
 
 	for {
 		checkForNewIssues()
